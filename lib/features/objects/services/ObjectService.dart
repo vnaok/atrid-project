@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/Object.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 
 class ObjetoService {
   final SupabaseClient supabase;
@@ -113,5 +115,41 @@ class ObjetoService {
         .from('objetos')
         .delete()
         .eq('id_objeto', idObjeto);
+  }
+
+  // ==========================================
+// SUBIR IMAGEN A SUPABASE STORAGE
+// ==========================================
+
+  Future<String> subirImagen({
+    required String museoId,
+    required File imagen,
+  }) async {
+    final extension = p.extension(imagen.path).toLowerCase();
+
+    final nombreArchivo =
+        '${DateTime.now().microsecondsSinceEpoch}$extension';
+
+    final ruta =
+        '$museoId/objetos/$nombreArchivo';
+
+    final contentType = switch (extension) {
+      '.png' => 'image/png',
+      '.webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+
+    await supabase.storage
+        .from('objetos-museo')
+        .upload(
+      ruta,
+      imagen,
+      fileOptions: FileOptions(
+        contentType: contentType,
+        upsert: false,
+      ),
+    );
+
+    return ruta;
   }
 }

@@ -214,8 +214,10 @@ class OnboardingEntryPage extends StatelessWidget {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
+                                    settings: const RouteSettings(
+                                      name: '/turista-home',
+                                    ),
                                     builder: (_) => const TuristaHomePage(
-
                                       museoId: 'd4b38809-ad57-45e6-95d1-fe8e328e82a2',
                                     ),
                                   ),

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+
+
+import '../../auth/services/AuthService.dart';
+import '../../challenges/presentation/gestionar_desafios_page.dart';
 import '../../missions/presentation/GestionarMisionesPage.dart';
 import '../../objects//presentation/GestionarObjetosPage.dart';
 class AdminHomePage extends StatelessWidget {
@@ -244,7 +249,14 @@ class AdminHomePage extends StatelessWidget {
                     title: 'Desafíos',
                     subtitle: 'Gestionar desafíos',
                     onTap: () {
-                      // TODO:
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GestionarDesafiosPage(
+                            supabase: Supabase.instance.client,
+                          ),
+                        ),
+                      );
                     },
                   ),
 
@@ -339,8 +351,30 @@ class AdminHomePage extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Luego conectamos AuthService.logout()
+                  onPressed: () async {
+                    try {
+                      final authService = AuthService(
+                        Supabase.instance.client,
+                      );
+
+                      await authService.logout();
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sesión cerrada correctamente'),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error al cerrar sesión: $e'),
+                          ),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.logout),
                   label: const Text('Cerrar sesión'),

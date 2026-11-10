@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/Object.dart';
@@ -15,23 +18,22 @@ class FormObjetoPage extends StatefulWidget {
   });
 
   @override
-  State<FormObjetoPage> createState() =>
-      _FormObjetoPageState();
+  State<FormObjetoPage> createState() => _FormObjetoPageState();
 }
 
-class _FormObjetoPageState
-    extends State<FormObjetoPage> {
-
+class _FormObjetoPageState extends State<FormObjetoPage> {
   late final ObjetoService _objetoService;
 
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _picker = ImagePicker();
 
   late final TextEditingController _nombreController;
   late final TextEditingController _descripcionController;
   late final TextEditingController _historiaController;
-  late final TextEditingController _imagenController;
   late final TextEditingController _codigoController;
   late final TextEditingController _ubicacionController;
+
+  XFile? _foto;
 
   bool _estado = true;
   bool _guardando = false;
@@ -60,10 +62,6 @@ class _FormObjetoPageState
       text: objeto?.informacionHistorica ?? '',
     );
 
-    _imagenController = TextEditingController(
-      text: objeto?.imagen ?? '',
-    );
-
     _codigoController = TextEditingController(
       text: objeto?.codigoIdentificador ?? '',
     );
@@ -80,7 +78,6 @@ class _FormObjetoPageState
     _nombreController.dispose();
     _descripcionController.dispose();
     _historiaController.dispose();
-    _imagenController.dispose();
     _codigoController.dispose();
     _ubicacionController.dispose();
 
@@ -88,7 +85,64 @@ class _FormObjetoPageState
   }
 
   // ==========================================
-  // GUARDAR
+  // TOMAR FOTOGRAFÍA
+  // ==========================================
+
+  Future<void> _tomarFotografia() async {
+    try {
+      final XFile? foto = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+
+      if (!mounted || foto == null) return;
+
+      setState(() {
+        _foto = foto;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir la cámara: $e'),
+        ),
+      );
+    }
+  }
+
+  // ==========================================
+  // SELECCIONAR FOTOGRAFÍA DE LA GALERÍA
+  // ==========================================
+
+  Future<void> _seleccionarFotografia() async {
+    try {
+      final XFile? foto = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1600,
+      );
+
+      if (!mounted || foto == null) return;
+
+      setState(() {
+        _foto = foto;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo seleccionar la imagen: $e'),
+        ),
+      );
+    }
+  }
+
+  // ==========================================
+  // GUARDAR OBJETO
   // ==========================================
 
   Future<void> _guardar() async {
@@ -101,6 +155,17 @@ class _FormObjetoPageState
     });
 
     try {
+      // Si hay una foto nueva, la subimos a Storage.
+      // Si no, conservamos la ruta de la imagen anterior.
+      String? rutaImagen = widget.objeto?.imagen;
+
+      if (_foto != null) {
+        rutaImagen = await _objetoService.subirImagen(
+          museoId: widget.museoId,
+          imagen: File(_foto!.path),
+        );
+      }
+
       if (_modoEdicion) {
         await _objetoService.actualizarObjeto(
           idObjeto: widget.objeto!.idObjeto,
@@ -111,9 +176,7 @@ class _FormObjetoPageState
           informacionHistorica: _textoOpcional(
             _historiaController.text,
           ),
-          imagen: _textoOpcional(
-            _imagenController.text,
-          ),
+          imagen: rutaImagen,
           codigoIdentificador:
           _codigoController.text.trim(),
           ubicacion: _textoOpcional(
@@ -131,9 +194,7 @@ class _FormObjetoPageState
           informacionHistorica: _textoOpcional(
             _historiaController.text,
           ),
-          imagen: _textoOpcional(
-            _imagenController.text,
-          ),
+          imagen: rutaImagen,
           codigoIdentificador:
           _codigoController.text.trim(),
           ubicacion: _textoOpcional(
@@ -161,9 +222,7 @@ class _FormObjetoPageState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Error guardando objeto: $e',
-          ),
+          content: Text('Error guardando objeto: $e'),
         ),
       );
     } finally {
@@ -175,14 +234,86 @@ class _FormObjetoPageState
     }
   }
 
+  // ==========================================
+  // TEXTO OPCIONAL
+  // ==========================================
+
   String? _textoOpcional(String texto) {
     final valor = texto.trim();
 
-    if (valor.isEmpty) {
-      return null;
+    return valor.isEmpty ? null : valor;
+  }
+
+  // ==========================================
+  // VISTA PREVIA DE LA FOTOGRAFÍA
+  // ==========================================
+
+  Widget _construirVistaPrevia() {
+    if (_foto != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          File(_foto!.path),
+          width: double.infinity,
+          height: 220,
+          fit: BoxFit.cover,
+        ),
+      );
     }
 
-    return valor;
+    if (_modoEdicion &&
+        widget.objeto?.imagen != null &&
+        widget.objeto!.imagen!.isNotEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              size: 48,
+            ),
+            SizedBox(height: 8),
+            Text('Este objeto ya tiene una imagen'),
+            Text(
+              'Tomá otra foto para reemplazarla.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: 180,
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.add_a_photo_outlined,
+            size: 54,
+          ),
+          SizedBox(height: 8),
+          Text('No se seleccionó ninguna fotografía'),
+        ],
+      ),
+    );
   }
 
   // ==========================================
@@ -194,20 +325,20 @@ class _FormObjetoPageState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _modoEdicion
-              ? 'Editar objeto'
-              : 'Nuevo objeto',
+          _modoEdicion ? 'Editar objeto' : 'Nuevo objeto',
         ),
       ),
-
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // NOMBRE
               TextFormField(
                 controller: _nombreController,
+                enabled: !_guardando,
                 decoration: const InputDecoration(
                   labelText: 'Nombre',
                   border: OutlineInputBorder(),
@@ -224,8 +355,10 @@ class _FormObjetoPageState
 
               const SizedBox(height: 16),
 
+              // CÓDIGO
               TextFormField(
                 controller: _codigoController,
+                enabled: !_guardando,
                 decoration: const InputDecoration(
                   labelText: 'Código identificador',
                   border: OutlineInputBorder(),
@@ -242,8 +375,10 @@ class _FormObjetoPageState
 
               const SizedBox(height: 16),
 
+              // DESCRIPCIÓN
               TextFormField(
                 controller: _descripcionController,
+                enabled: !_guardando,
                 maxLines: 4,
                 decoration: const InputDecoration(
                   labelText: 'Descripción',
@@ -254,8 +389,10 @@ class _FormObjetoPageState
 
               const SizedBox(height: 16),
 
+              // INFORMACIÓN HISTÓRICA
               TextFormField(
                 controller: _historiaController,
+                enabled: !_guardando,
                 maxLines: 6,
                 decoration: const InputDecoration(
                   labelText: 'Información histórica',
@@ -264,21 +401,62 @@ class _FormObjetoPageState
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-              TextFormField(
-                controller: _imagenController,
-                decoration: const InputDecoration(
-                  labelText: 'Imagen',
-                  hintText: 'URL de la imagen',
-                  border: OutlineInputBorder(),
+              // FOTOGRAFÍA
+              Text(
+                'Fotografía del objeto',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium,
+              ),
+
+              const SizedBox(height: 12),
+
+              _construirVistaPrevia(),
+
+              const SizedBox(height: 12),
+
+              OutlinedButton.icon(
+                onPressed:
+                _guardando ? null : _tomarFotografia,
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Tomar fotografía'),
+              ),
+
+              OutlinedButton.icon(
+                onPressed: _guardando
+                    ? null
+                    : _seleccionarFotografia,
+                icon: const Icon(Icons.photo_library),
+                label: const Text(
+                  'Seleccionar de la galería',
                 ),
               ),
 
+              if (_foto != null) ...[
+                const SizedBox(height: 4),
+                TextButton.icon(
+                  onPressed: _guardando
+                      ? null
+                      : () {
+                    setState(() {
+                      _foto = null;
+                    });
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text(
+                    'Descartar fotografía nueva',
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 16),
 
+              // UBICACIÓN
               TextFormField(
                 controller: _ubicacionController,
+                enabled: !_guardando,
                 decoration: const InputDecoration(
                   labelText: 'Ubicación',
                   hintText: 'Ej. Sala 2 - Vitrina 4',
@@ -288,10 +466,12 @@ class _FormObjetoPageState
 
               const SizedBox(height: 16),
 
+              // ESTADO
               SwitchListTile(
                 title: const Text('Objeto activo'),
                 subtitle: const Text(
-                  'Los objetos inactivos no se mostrarán al visitante.',
+                  'Los objetos inactivos no se mostrarán '
+                      'al visitante.',
                 ),
                 value: _estado,
                 onChanged: _guardando
@@ -305,6 +485,7 @@ class _FormObjetoPageState
 
               const SizedBox(height: 24),
 
+              // GUARDAR
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(

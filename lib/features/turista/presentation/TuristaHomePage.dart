@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import 'package:flutter/foundation.dart';
+
+import 'detalle_mision_page.dart';
 
 import '../model/Mision.dart';
+
 import '../model/ObjetoMuseo.dart';
+
 import '../model/VisitorState.dart';
 
 import '../service/TuristaService.dart';
+
+
 
 class TuristaHomePage extends StatefulWidget {
   final String museoId;
@@ -20,7 +27,12 @@ class TuristaHomePage extends StatefulWidget {
   State<TuristaHomePage> createState() => _TuristaHomePageState();
 }
 
+
+
+
 class _TuristaHomePageState extends State<TuristaHomePage> {
+
+
   late final TuristaService _turistaService;
 
   bool _loading = true;
@@ -29,7 +41,32 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
   List<Mision> _misiones = [];
   List<ObjetoMuseo> _objetos = [];
 
-  VisitorState? _estadisticas;
+  // Estadísticas temporales de la visita
+  VisitorState _estadisticas = VisitorState(
+    misionesCompletadas: 0,
+    puntos: 0,
+  );
+
+// Registrar una misión finalizada
+  void _registrarMisionFinalizada(int puntosGanados) {
+    debugPrint('========== REGISTRAR MISIÓN ==========');
+    debugPrint('Puntos recibidos: $puntosGanados');
+    debugPrint('Puntos anteriores: ${_estadisticas.puntos}');
+
+    if (!mounted) return;
+
+    setState(() {
+      _estadisticas = VisitorState(
+        misionesCompletadas: _estadisticas.misionesCompletadas + 1,
+        puntos: _estadisticas.puntos + puntosGanados,
+      );
+    });
+
+    debugPrint('Puntos nuevos: ${_estadisticas.puntos}');
+    debugPrint('======================================');
+  }
+
+
 
   @override
   void initState() {
@@ -40,19 +77,19 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
     _cargarDatos();
   }
 
+
+
   Future<void> _cargarDatos() async {
     try {
       final resultados = await Future.wait([
         _turistaService.obtenerMisiones(widget.museoId),
         _turistaService.obtenerObjetos(widget.museoId),
-        _turistaService.obtenerEstadisticas(widget.museoId),
       ]);
 
       if (!mounted) return;
 
       final misiones = resultados[0] as List<Mision>;
       final objetos = resultados[1] as List<ObjetoMuseo>;
-      final estadisticas = resultados[2] as VisitorState;
 
       debugPrint('Museo: ${widget.museoId}');
       debugPrint('Misiones cargadas: ${misiones.length}');
@@ -61,7 +98,12 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
       setState(() {
         _misiones = misiones;
         _objetos = objetos;
-        _estadisticas = estadisticas;
+
+        // Estadísticas nuevas para esta visita
+        _estadisticas = VisitorState(
+          misionesCompletadas: 0,
+          puntos: 0,
+        );
 
         _loading = false;
         _error = null;
@@ -79,8 +121,12 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
     }
   }
 
+
+
   @override
   Widget build(BuildContext context) {
+
+
     if (_loading) {
       return const Scaffold(
         backgroundColor: Color(0xFFF5EFE6),
@@ -231,7 +277,7 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
   }
 
   // =========================================================
-  // ESTADISTICAS
+  // ESTADISTICAS CLAVEEEEEEEE
   // =========================================================
 
   Widget _buildEstadisticas() {
@@ -243,8 +289,8 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
         Expanded(
           child: _buildStatCard(
             icon: Icons.flag_rounded,
-            value: '${stats.misionesCompletadas}',
-            label: 'Misiones',
+            value: '${_estadisticas.misionesCompletadas}',
+            label: 'Misiones completadas',
           ),
         ),
 
@@ -253,7 +299,7 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
         Expanded(
           child: _buildStatCard(
             icon: Icons.star_rounded,
-            value: '${stats.puntos}',
+            value: '${_estadisticas.puntos}',
             label: 'Puntos',
           ),
         ),
@@ -382,38 +428,27 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
   Widget _buildMisionCard(Mision mision) {
     return Container(
       width: double.infinity,
-
       padding: const EdgeInsets.all(18),
-
       decoration: BoxDecoration(
         color: const Color(0xFFF9F6F0),
-
         borderRadius: BorderRadius.circular(16),
-
         border: Border.all(
           color: const Color(0xFFD6CEC2),
         ),
       ),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
-
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-
             children: [
-
               Container(
                 width: 48,
                 height: 48,
-
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1EBE1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-
                 child: const Icon(
                   Icons.flag_rounded,
                   color: Color(0xFF8B6F47),
@@ -424,14 +459,10 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
-
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Text(
                       mision.nombre,
-
                       style: const TextStyle(
                         color: Color(0xFF292621),
                         fontSize: 17,
@@ -442,7 +473,6 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
                     if (mision.dificultad != null)
                       Text(
                         mision.dificultad!,
-
                         style: const TextStyle(
                           color: Color(0xFF8B6F47),
                           fontSize: 12,
@@ -458,7 +488,6 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
           Text(
             mision.descripcion,
-
             style: const TextStyle(
               color: Color(0xFF756F68),
               fontSize: 13,
@@ -471,7 +500,6 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
             Row(
               children: [
-
                 const Icon(
                   Icons.schedule_rounded,
                   size: 16,
@@ -482,7 +510,6 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
                 Text(
                   '${mision.duracionEstimada} min',
-
                   style: const TextStyle(
                     color: Color(0xFF756F68),
                     fontSize: 12,
@@ -497,30 +524,28 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
           SizedBox(
             width: double.infinity,
             height: 44,
-
             child: OutlinedButton(
               onPressed: () {
-                // Próximamente:
-                // abrir detalle de misión
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DetalleMisionPage(
+                      idMision: mision.id,
+                      onMisionFinalizada: _registrarMisionFinalizada,
+                    ),
+                  ),
+                );
               },
-
               style: OutlinedButton.styleFrom(
-                foregroundColor:
-                const Color(0xFF8B6F47),
-
+                foregroundColor: const Color(0xFF8B6F47),
                 side: const BorderSide(
                   color: Color(0xFF8B6F47),
                 ),
-
                 shape: RoundedRectangleBorder(
-                  borderRadius:
-                  BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-
-              child: const Text(
-                'Ver misión',
-              ),
+              child: const Text('Ver misión'),
             ),
           ),
         ],
@@ -543,33 +568,47 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
       children: _objetos.map((objeto) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-
           child: _buildObjetoCard(objeto),
         );
       }).toList(),
     );
   }
 
+  // =========================================================
+  // TARJETA DE OBJETO
+  // =========================================================
+
   Widget _buildObjetoCard(ObjetoMuseo objeto) {
+
+    final String? rutaImagen = objeto.imagen?.trim();
+
+    final String? imagenUrl =
+    rutaImagen != null && rutaImagen.isNotEmpty
+        ? supabase.storage
+        .from('objetos-museo')
+        .getPublicUrl(rutaImagen)
+        : null;
+
+    final bool tieneImagen =
+        imagenUrl != null &&
+            imagenUrl.isNotEmpty;
+
     return Container(
       width: double.infinity,
-
       padding: const EdgeInsets.all(14),
 
       decoration: BoxDecoration(
         color: const Color(0xFFF9F6F0),
-
         borderRadius: BorderRadius.circular(16),
-
         border: Border.all(
           color: const Color(0xFFD6CEC2),
         ),
       ),
 
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          // Imagen
+          // Miniatura de la imagen
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
 
@@ -577,14 +616,34 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
               width: 78,
               height: 78,
 
-              child: objeto.imagen != null &&
-                  objeto.imagen!.isNotEmpty
+              child: tieneImagen
                   ? Image.network(
-                objeto.imagen!,
+                imagenUrl!,
+                width: 78,
+                height: 78,
                 fit: BoxFit.cover,
 
-                errorBuilder:
-                    (_, __, ___) {
+                // Mientras se descarga la imagen
+                loadingBuilder: (
+                    context,
+                    child,
+                    loadingProgress,
+                    ) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+
+                  return _buildImagePlaceholder(
+                    cargando: true,
+                  );
+                },
+
+                // Si falla la descarga o la URL
+                errorBuilder: (
+                    context,
+                    error,
+                    stackTrace,
+                    ) {
                   return _buildImagePlaceholder();
                 },
               )
@@ -594,13 +653,11 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
           const SizedBox(width: 14),
 
+          // Información del objeto
           Expanded(
             child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
                   objeto.nombre,
 
@@ -626,12 +683,12 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
                   ),
                 ),
 
-                if (objeto.ubicacion != null) ...[
+                if (objeto.ubicacion != null &&
+                    objeto.ubicacion!.trim().isNotEmpty) ...[
                   const SizedBox(height: 7),
 
                   Row(
                     children: [
-
                       const Icon(
                         Icons.location_on_outlined,
                         color: Color(0xFF8B6F47),
@@ -645,8 +702,7 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
                           objeto.ubicacion!,
 
                           maxLines: 1,
-                          overflow:
-                          TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
 
                           style: const TextStyle(
                             color: Color(0xFF8B6F47),
@@ -665,14 +721,33 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
     );
   }
 
-  Widget _buildImagePlaceholder() {
+  // =========================================================
+  // PLACEHOLDER DE IMAGEN
+  // =========================================================
+
+  Widget _buildImagePlaceholder({
+    bool cargando = false,
+  }) {
     return Container(
+      width: 78,
+      height: 78,
       color: const Color(0xFFE8DFD0),
 
-      child: const Icon(
-        Icons.museum_rounded,
-        color: Color(0xFF8B6F47),
-        size: 32,
+      child: Center(
+        child: cargando
+            ? const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFF8B6F47),
+          ),
+        )
+            : const Icon(
+          Icons.museum_rounded,
+          color: Color(0xFF8B6F47),
+          size: 32,
+        ),
       ),
     );
   }
