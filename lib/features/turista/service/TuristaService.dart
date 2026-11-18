@@ -14,15 +14,15 @@ class TuristaService {
   // =========================================================
 
   Future<List<Mision>> obtenerMisiones(String museoId) async {
-    final response = await supabase
+    final data = await supabase
         .from('misiones')
-        .select();
+        .select()
+        .eq('id_museo', museoId)
+        .eq('estado', 'publicada')
+        .order('nombre');
 
-    print('TODAS LAS MISIONES SUPABASE: $response');
-    print('MUSEO BUSCADO: $museoId');
-
-    return (response as List)
-        .map((item) => Mision.fromMap(item))
+    return data
+        .map<Mision>((json) => Mision.fromMap(json))
         .toList();
   }
 

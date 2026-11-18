@@ -1,17 +1,125 @@
 import 'package:flutter/material.dart';
+import 'package:prueba_flutter/features/badges/presentation/GestionarInsigniasPage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 
+import '../../../core/supabase/supabase_client.dart';
 import '../../auth/services/AuthService.dart';
+import '../../badges/services/badgeService.dart';
 import '../../challenges/presentation/gestionar_desafios_page.dart';
+
 import '../../missions/presentation/GestionarMisionesPage.dart';
 import '../../objects//presentation/GestionarObjetosPage.dart';
-class AdminHomePage extends StatelessWidget {
+import '../services/analytics_service.dart';
+
+
+class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
 
   @override
+  State<AdminHomePage> createState() => _AdminHomePageState();
+}
+
+class _AdminHomePageState extends State<AdminHomePage> {
+
+  static const String _museoId =
+      'd4b38809-ad57-45e6-95d1-fe8e328e82a2';
+
+  late final AnalyticsService _analyticsService;
+
+  int _totalMisiones = 0;
+  int _totalInsignias = 0;
+  int _totalObjetos = 0;
+  int _totalCuentas = 0;
+
+  List<Map<String, dynamic>> _iniciosUltimos7Dias = [];
+
+  bool _cargandoGrafico = true;
+
+  bool _cargandoMetricas = true;
+  String? _errorMetricas;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _analyticsService = AnalyticsService(
+      Supabase.instance.client,
+    );
+
+    _cargarMetricas();
+  }
+
+
+  String _obtenerDiaSemana(int dia) {
+    const dias = [
+      'L', 'M', 'X', 'J', 'V', 'S', 'D'
+    ];
+
+    return dias[dia - 1];
+  }
+
+  Future<void> _cargarMetricas() async {
+    try {
+      setState(() {
+
+        _cargandoMetricas = true;
+        _errorMetricas = null;
+
+      });
+
+
+
+      final resultados = await Future.wait<int>([
+        _analyticsService.contarMisionesTotales(_museoId),
+        _analyticsService.contarInsignias(_museoId),
+        _analyticsService.contarObjetos(_museoId),
+        _analyticsService.contarCuentasCreadas(),
+
+      ]);
+
+      final inicios = await _analyticsService
+          .obtenerIniciosUltimos7Dias('d4b38809-ad57-45e6-95d1-fe8e328e82a2');
+
+      if (!mounted) return;
+
+      setState(() {
+        _totalMisiones = resultados[0];
+        _totalInsignias = resultados[1];
+        _totalObjetos = resultados[2];
+        _totalCuentas = resultados[3];
+        _iniciosUltimos7Dias = inicios;
+      });
+
+    } catch (e) {
+      debugPrint('Error al cargar métricas: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _errorMetricas = 'No se pudieron cargar las métricas.';
+      });
+
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cargandoMetricas = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+
+    final int maxInicios = _iniciosUltimos7Dias.isEmpty
+        ? 0
+        : _iniciosUltimos7Dias
+        .map((dia) => dia['cantidad'] as int)
+        .reduce((a, b) => a > b ? a : b);
+
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5EFE6),
 
@@ -86,6 +194,8 @@ class AdminHomePage extends StatelessWidget {
               // MÉTRICAS
               // =====================================================
 
+
+
               const Text(
                 'Resumen',
                 style: TextStyle(
@@ -97,6 +207,46 @@ class AdminHomePage extends StatelessWidget {
 
               const SizedBox(height: 12),
 
+              if (_errorMetricas != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Color(0xFF8B3A3A),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMetricas!,
+                          style: const TextStyle(
+                            color: Color(0xFF8B3A3A),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _cargarMetricas,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Reintentar',
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _cargandoMetricas
+                        ? null
+                        : _cargarMetricas,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Actualizar métricas'),
+                  ),
+                ),
+
+              const SizedBox(height: 8),
+
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -104,30 +254,37 @@ class AdminHomePage extends StatelessWidget {
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: 1.6,
-                children: const [
-
+                children: [
                   _MetricCard(
                     icon: Icons.people_outline,
-                    title: 'Visitantes',
-                    value: '142',
+                    title: 'Cuentas creadas',
+                    value: _cargandoMetricas
+                        ? '...'
+                        : _totalCuentas.toString(),
                   ),
 
                   _MetricCard(
                     icon: Icons.flag_outlined,
                     title: 'Misiones',
-                    value: '12',
+                    value: _cargandoMetricas
+                        ? '...'
+                        : _totalMisiones.toString(),
                   ),
 
                   _MetricCard(
                     icon: Icons.inventory_2_outlined,
                     title: 'Objetos',
-                    value: '35',
+                    value: _cargandoMetricas
+                        ? '...'
+                        : _totalObjetos.toString(),
                   ),
 
                   _MetricCard(
                     icon: Icons.workspace_premium_outlined,
                     title: 'Insignias',
-                    value: '8',
+                    value: _cargandoMetricas
+                        ? '...'
+                        : _totalInsignias.toString(),
                   ),
                 ],
               ),
@@ -162,7 +319,6 @@ class AdminHomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
@@ -184,19 +340,34 @@ class AdminHomePage extends StatelessWidget {
 
                     SizedBox(
                       height: 160,
-                      child: Row(
+                      child: _cargandoMetricas
+                          ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF8B6F47),
+                        ),
+                      )
+                          : _iniciosUltimos7Dias.isEmpty
+                          ? const Center(
+                        child: Text(
+                          'No hay visitas registradas esta semana.',
+                          style: TextStyle(
+                            color: Color(0xFF8B6F47),
+                            fontSize: 13,
+                          ),
+                        ),
+                      )
+                          : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment:
-                        MainAxisAlignment.spaceAround,
-                        children: const [
-                          _ChartBar(day: 'L', value: 45),
-                          _ChartBar(day: 'M', value: 62),
-                          _ChartBar(day: 'X', value: 85),
-                          _ChartBar(day: 'J', value: 55),
-                          _ChartBar(day: 'V', value: 92),
-                          _ChartBar(day: 'S', value: 70),
-                          _ChartBar(day: 'D', value: 110),
-                        ],
+                        children: _iniciosUltimos7Dias.map((dia) {
+                          final fecha = DateTime.parse(dia['fecha']);
+
+                          return _ChartBar(
+                            day: _obtenerDiaSemana(fecha.weekday),
+                            value: dia['cantidad'] as int,
+                            maxValue: maxInicios,
+                          );
+                        }).toList(),
                       ),
                     ),
                   ],
@@ -281,7 +452,15 @@ class AdminHomePage extends StatelessWidget {
                     title: 'Insignias',
                     subtitle: 'Gestionar recompensas',
                     onTap: () {
-                      // TODO:
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GestionarInsigniaPage(
+                            idMuseo: 'd4b38809-ad57-45e6-95d1-fe8e328e82a2',
+                            badgeService: BadgeService(supabase),
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -513,36 +692,49 @@ class _ManagementCard extends StatelessWidget {
 
 class _ChartBar extends StatelessWidget {
   final String day;
-  final double value;
+  final int value;
+  final int maxValue;
 
   const _ChartBar({
     required this.day,
     required this.value,
+    required this.maxValue,
   });
 
   @override
   Widget build(BuildContext context) {
+    final double altura = maxValue == 0
+        ? 0
+        : (value / maxValue) * 100;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              width: 22,
-              height: value,
-              decoration: BoxDecoration(
-                color: const Color(0xFF8B6F47),
-                borderRadius: BorderRadius.circular(5),
-              ),
-            ),
+        Text(
+          '$value',
+          style: const TextStyle(
+            fontSize: 11,
+            color: Color(0xFF756F68),
           ),
         ),
-        const SizedBox(height: 6),
+
+        const SizedBox(height: 5),
+
+        Container(
+          width: 22,
+          height: altura.clamp(4.0, 100.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF8B6F47),
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
         Text(
           day,
           style: const TextStyle(
-            fontSize: 11,
+            fontSize: 12,
             color: Color(0xFF756F68),
           ),
         ),

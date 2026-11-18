@@ -26,7 +26,7 @@ class _FormIdentificacionPageState
   final List<TextEditingController> _opciones =
   List.generate(4, (_) => TextEditingController());
 
-  final _imagenController = TextEditingController();
+  //final _imagenController = TextEditingController();
 
   List<Map<String, dynamic>> _objetos = [];
 
@@ -52,6 +52,49 @@ class _FormIdentificacionPageState
   void initState() {
     super.initState();
     _cargar();
+  }
+
+
+
+  Widget _imagenNoDisponible() {
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAE3D8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_outlined,
+            size: 40,
+            color: Color(0xFF8B6F47),
+          ),
+          SizedBox(height: 8),
+          Text('Imagen no disponible'),
+        ],
+      ),
+    );
+  }
+
+  String? _obtenerUrlImagen(String? imagen) {
+    if (imagen == null || imagen.trim().isEmpty) {
+      return null;
+    }
+
+    final ruta = imagen.trim();
+
+    // Si ya es una URL completa, la utilizamos directamente.
+    if (ruta.startsWith('http://') || ruta.startsWith('https://')) {
+      return ruta;
+    }
+
+    // Si es una ruta interna, obtenemos la URL del bucket.
+    return widget.supabase.storage
+        .from('objetos-museo')
+        .getPublicUrl(ruta);
   }
 
   Future<void> _cargar() async {
@@ -83,8 +126,7 @@ class _FormIdentificacionPageState
           _idObjeto =
               configuracion['id_objeto_correcto']?.toString();
 
-          _imagenController.text =
-              configuracion['imagen_referencia'] ?? '';
+
 
           final tipo =
           configuracion['tipo_identificacion']?.toString();
@@ -117,13 +159,8 @@ class _FormIdentificacionPageState
   void _seleccionarObjeto(String? id) {
     if (id == null) return;
 
-    final objeto = _objetos.firstWhere(
-          (o) => o['id_objeto'].toString() == id,
-    );
-
     setState(() {
       _idObjeto = id;
-      _imagenController.text = objeto['imagen']?.toString() ?? '';
     });
   }
 
@@ -147,16 +184,29 @@ class _FormIdentificacionPageState
 
     try {
       await widget.supabase
+          .from('desafio_identificacion_config');
+      final resultado = await widget.supabase
           .from('desafio_identificacion_config')
           .upsert({
         'id_desafio': widget.idDesafio,
         'id_objeto_correcto': _idObjeto,
-        'imagen_referencia':
-        _imagenController.text.trim().isEmpty
-            ? null
-            : _imagenController.text.trim(),
         'tipo_identificacion': _tipoIdentificacion,
-      }, onConflict: 'id_desafio');
+      }, onConflict: 'id_desafio')
+          .select()
+          .single();
+
+      debugPrint('CONFIGURACIÓN GUARDADA: $resultado');
+
+
+      final verificacion = await widget.supabase
+          .from('desafio_identificacion_config')
+          .select()
+          .eq('id_desafio', widget.idDesafio)
+          .maybeSingle();
+
+      debugPrint('ID DEL DESAFÍO: ${widget.idDesafio}');
+      debugPrint('ID DEL OBJETO SELECCIONADO: $_idObjeto');
+      debugPrint('CONFIGURACIÓN GUARDADA: $verificacion');
 
       await widget.supabase
           .from('desafio_opciones')
@@ -269,13 +319,66 @@ class _FormIdentificacionPageState
                   },
                 ),
                 const SizedBox(height: 18),
-                DesafioFormField(
-                  label: 'Imagen de referencia',
-                  controller: _imagenController,
-                  hint: 'Ruta de imagen en Supabase Storage',
-                  helperText:
-                  'Se completa automáticamente al seleccionar un objeto.',
-                ),
+                const SizedBox(height: 18),
+
+                if (_idObjeto != null)
+                  Builder(
+                    builder: (context) {
+                      final objeto = _objetos.firstWhere(
+                            (o) => o['id_objeto'].toString() == _idObjeto,
+                      );
+
+                      final imagen = objeto['imagen']?.toString();
+
+                      final urlImagen = _obtenerUrlImagen(imagen);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Imagen del objeto seleccionado',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF292621),
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          if (urlImagen != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                urlImagen,
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+
+                                  return const SizedBox(
+                                    height: 180,
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        color: Color(0xFF8B6F47),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  debugPrint('Error al cargar imagen: $error');
+                                  debugPrint('URL utilizada: $urlImagen');
+
+                                  return _imagenNoDisponible();
+                                },
+                              ),
+                            )
+                          else
+                            _imagenNoDisponible(),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
           ),
@@ -348,7 +451,9 @@ class _FormIdentificacionPageState
     for (final controller in _opciones) {
       controller.dispose();
     }
-    _imagenController.dispose();
+
     super.dispose();
   }
+
+  //VOLVER ATRAS HASTA QUE SE PONGA EL COMENTARIO EN CASO DE FALLA
 }

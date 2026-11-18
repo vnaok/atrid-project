@@ -7,17 +7,20 @@ import 'package:prueba_flutter/features/challenges/models/desafio_opcion_publica
 import 'package:prueba_flutter/features/challenges/services/desafio_service.dart';
 import 'package:prueba_flutter/features/challenges/services/desafio_opcionpublicaservice.dart';
 import 'package:prueba_flutter/features/challenges/services/intento_desafio_service.dart';
-
+import 'package:prueba_flutter/features/challenges/models/desafio_identificacion_config.dart';
+import 'package:prueba_flutter/features/challenges/services/desafio_identificacionservice.dart';
 import 'package:prueba_flutter/features/turista/presentation/MisionFinalizadaPage.dart';
 
 class MisionEnCursoPage extends StatefulWidget {
   final String idMision;
-
   final ValueChanged<int> onMisionFinalizada;
+  final VoidCallback onVolverInicio;
+
 
   const MisionEnCursoPage({
     super.key,
     required this.idMision,
+    required this.onVolverInicio,
     required this.onMisionFinalizada,
   });
 
@@ -33,6 +36,12 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
   late final DesafioService _desafioService;
   late final DesafioOpcionService _opcionService;
   late final IntentoDesafioService _intentoService;
+
+  late final DesafioIdentificacionService _identificacionService;
+
+  DesafioIdentificacionConfig? _configIdentificacion;
+
+  Map<String, dynamic>? _objetoIdentificacion;
 
   List<DesafioMuseo> _preguntas = [];
   List<DesafioOpcionPublica> _opciones = [];
@@ -60,6 +69,10 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
   void initState() {
 
     super.initState();
+
+    _identificacionService =
+        DesafioIdentificacionService(_supabase);
+
     debugPrint(
       'CURSO: ${widget.onMisionFinalizada != null}',
     );
@@ -77,6 +90,173 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
 
     _cargarPreguntas();
   }
+
+
+  Future<void> _cargarDatosDesafio(
+      DesafioMuseo desafio,
+      ) async {
+    String etapa = 'Inicio';
+
+    debugPrint('');
+    debugPrint('========================================');
+    debugPrint('INICIO DE CARGA DE DESAFÍO');
+    debugPrint('========================================');
+
+    debugPrint('ID DESAFÍO: ${desafio.idDesafio}');
+    debugPrint('TIPO DESAFÍO: ${desafio.tipo}');
+    debugPrint('TIPO BD: ${desafio.tipo.toString().split('.').last}');
+
+    try {
+      // ETAPA 1: Cargar alternativas.
+      etapa = 'Cargar alternativas';
+
+      debugPrint('ETAPA 1: $etapa');
+
+      final opciones = await _opcionService.listarPorDesafio(
+        desafio.idDesafio,
+      );
+
+      debugPrint('ALTERNATIVAS ENCONTRADAS: ${opciones.length}');
+
+      for (final opcion in opciones) {
+        debugPrint(
+          'OPCIÓN: ${opcion.idOpcion} | ${opcion.texto}',
+        );
+      }
+
+      DesafioIdentificacionConfig? configuracion;
+      Map<String, dynamic>? objeto;
+
+      // ETAPA 2: Recuperar configuración de identificación.
+      if (desafio.tipo == TipoDesafio.identificacion) {
+        etapa = 'Recuperar configuración de identificación';
+
+        debugPrint('ETAPA 2: $etapa');
+        debugPrint(
+          'ID UTILIZADO PARA BUSCAR CONFIGURACIÓN: ${desafio.idDesafio}',
+        );
+
+        configuracion = await _identificacionService.obtener(
+          desafio.idDesafio,
+        );
+
+        debugPrint('RESULTADO DE OBTENER(): $configuracion');
+
+        if (configuracion == null) {
+          debugPrint('ERROR: OBTENER() DEVOLVIÓ NULL');
+
+          throw Exception(
+            'El desafío no tiene una configuración de identificación.',
+          );
+        }
+
+        debugPrint(
+          'ID DESAFÍO CONFIGURACIÓN: ${configuracion.idDesafio}',
+        );
+
+        debugPrint(
+          'ID OBJETO CORRECTO: ${configuracion.idObjetoCorrecto}',
+        );
+
+        debugPrint(
+          'TIPO IDENTIFICACIÓN: ${configuracion.tipoIdentificacion}',
+        );
+
+        // ETAPA 3: Validar objeto asociado.
+        etapa = 'Validar objeto asociado';
+
+        debugPrint('ETAPA 3: $etapa');
+
+        final idObjeto = configuracion.idObjetoCorrecto;
+
+        if (idObjeto == null || idObjeto.isEmpty) {
+          throw Exception(
+            'La configuración no tiene un objeto correcto asignado.',
+          );
+        }
+
+        // ETAPA 4: Consultar objeto.
+        etapa = 'Consultar objeto en Supabase';
+
+        debugPrint('ETAPA 4: $etapa');
+        debugPrint('ID OBJETO BUSCADO: $idObjeto');
+
+        objeto = await _supabase
+            .from('objetos')
+            .select('id_objeto, nombre, imagen')
+            .eq('id_objeto', idObjeto)
+            .single();
+
+        debugPrint('OBJETO RECUPERADO: $objeto');
+      } else {
+        debugPrint(
+          'EL DESAFÍO NO ES DE IDENTIFICACIÓN. '
+              'Se omite la configuración especial.',
+        );
+      }
+
+      // ETAPA 5: Actualizar interfaz.
+      etapa = 'Actualizar estado de pantalla';
+
+      debugPrint('ETAPA 5: $etapa');
+
+      if (!mounted) {
+        debugPrint('WIDGET DESMONTADO. SE CANCELA LA ACTUALIZACIÓN.');
+        return;
+      }
+
+      setState(() {
+        _opciones = opciones;
+        _configIdentificacion = configuracion;
+        _objetoIdentificacion = objeto;
+
+        _opcionSeleccionada = null;
+        _respuestaEnviada = false;
+        _respuestaCorrecta = false;
+
+        _cargando = false;
+        _error = null;
+      });
+
+      debugPrint('DESAFÍO CARGADO CORRECTAMENTE.');
+      debugPrint('========================================');
+    } catch (e, stackTrace) {
+      debugPrint('');
+      debugPrint('========================================');
+      debugPrint('ERROR AL CARGAR DESAFÍO');
+      debugPrint('ETAPA DEL ERROR: $etapa');
+      debugPrint('ID DESAFÍO: ${desafio.idDesafio}');
+      debugPrint('TIPO DESAFÍO: ${desafio.tipo}');
+      debugPrint('ERROR COMPLETO: $e');
+      debugPrint('STACKTRACE: $stackTrace');
+      debugPrint('========================================');
+
+      if (!mounted) return;
+
+      setState(() {
+        _cargando = false;
+        _error = 'No fue posible cargar el desafío: $e';
+      });
+    }
+  }
+
+  String? _obtenerUrlImagen(String? imagen) {
+    if (imagen == null || imagen.trim().isEmpty) {
+      return null;
+    }
+
+    final ruta = imagen.trim();
+
+    if (ruta.startsWith('https://') ||
+        ruta.startsWith('http://')) {
+      return ruta;
+    }
+
+    return _supabase.storage
+        .from('objetos-museo')
+        .getPublicUrl(ruta);
+  }
+
   Future<void> _cargarPreguntas() async {
     try {
       setState(() {
@@ -84,8 +264,11 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
         _error = null;
       });
 
-      final preguntas = await _desafioService.listarPreguntasPorMision(
+      // MODIFICACIÓN 1:
+      // Ahora recuperamos TODOS los tipos de desafíos activos.
+      final preguntas = await _desafioService.listarPorMision(
         widget.idMision,
+        soloActivos: true,
       );
 
       if (preguntas.isEmpty) {
@@ -94,24 +277,25 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
         setState(() {
           _preguntas = [];
           _cargando = false;
-          _error = 'Esta misión todavía no tiene preguntas disponibles.';
+          _error = 'Esta misión todavía no tiene desafíos disponibles.';
         });
 
         return;
       }
 
-      final opciones = await _opcionService.listarPorDesafio(
-        preguntas.first.idDesafio,
-      );
-
       if (!mounted) return;
 
+      // MODIFICACIÓN 2:
+      // Guardamos los desafíos y establecemos el primero.
       setState(() {
         _preguntas = preguntas;
-        _opciones = opciones;
         _indiceActual = 0;
-        _cargando = false;
       });
+
+      // MODIFICACIÓN 3:
+      // Cargamos los datos según el tipo del primer desafío.
+      await _cargarDatosDesafio(preguntas.first);
+
     } catch (e) {
       if (!mounted) return;
 
@@ -269,9 +453,8 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
           desafiosCompletados: _desafiosCompletados,
           totalDesafios: _preguntas.length,
           respuestasCorrectas: _respuestasCorrectas,
-
-          // ESTA ES LA LÍNEA QUE FALTA
           onMisionFinalizada: widget.onMisionFinalizada,
+          onVolverInicio: widget.onVolverInicio,
         ),
       ),
     );
@@ -387,6 +570,100 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
     );
   }
 
+  Widget _construirReferenciaIdentificacion() {
+    if (_configIdentificacion == null ||
+        _objetoIdentificacion == null) {
+      return const SizedBox.shrink();
+    }
+
+    final objeto = _objetoIdentificacion!;
+    final nombre = objeto['nombre']?.toString() ?? 'Objeto';
+    final imagen = objeto['imagen']?.toString();
+    final urlImagen = _obtenerUrlImagen(imagen);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Objeto de referencia',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: texto,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          if (urlImagen != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                urlImagen,
+                width: double.infinity,
+                height: 190,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('Error imagen identificación: $error');
+
+                  return const SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 45,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            const SizedBox(
+              height: 120,
+              child: Center(
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 45,
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            nombre,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: texto,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            'Característica a identificar: '
+                '${_configIdentificacion!.tipoIdentificacion}',
+            style: const TextStyle(
+              fontSize: 14,
+              color: texto,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _construirContenido() {
     if (_cargando) {
       return const Center(
@@ -470,17 +747,19 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
           const SizedBox(height: 30),
 
           // Tipo de desafío
-          const Text(
-            'PREGUNTA',
-            style: TextStyle(
+          Text(
+            _preguntaActual.tipo.toString().split('.').last.toUpperCase(),
+            style: const TextStyle(
               color: acento,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.2,
               fontSize: 12,
             ),
           ),
-
           const SizedBox(height: 12),
+
+          if (_preguntaActual.tipo == TipoDesafio.identificacion)
+            _construirReferenciaIdentificacion(),
 
           // Enunciado
           Text(
@@ -585,4 +864,6 @@ class _MisionEnCursoPageState extends State<MisionEnCursoPage> {
     );
   }
 }
+
+
 

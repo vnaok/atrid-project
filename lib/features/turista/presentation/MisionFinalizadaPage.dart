@@ -6,8 +6,8 @@ class MisionFinalizadaPage extends StatelessWidget {
   final int totalDesafios;
   final int respuestasCorrectas;
 
-  // Callback para comunicar los puntos obtenidos.
   final ValueChanged<int> onMisionFinalizada;
+  final VoidCallback onVolverInicio;
 
   const MisionFinalizadaPage({
     super.key,
@@ -16,6 +16,8 @@ class MisionFinalizadaPage extends StatelessWidget {
     required this.totalDesafios,
     required this.respuestasCorrectas,
     required this.onMisionFinalizada,
+
+    required this.onVolverInicio,
   });
 
   @override
@@ -74,13 +76,10 @@ class MisionFinalizadaPage extends StatelessWidget {
                   onPressed: () {
                     debugPrint('========== FINALIZAR MISIÓN ==========');
                     debugPrint('Puntaje obtenido: $puntajeObtenido');
-                    debugPrint('Callback disponible: ${onMisionFinalizada != null}');
 
                     onMisionFinalizada.call(puntajeObtenido);
 
-                    Navigator.of(context).popUntil(
-                          (route) => route.settings.name == '/turista-home',
-                    );
+                    onVolverInicio();
                   },
                   child: const Text('Volver al inicio'),
                 ),

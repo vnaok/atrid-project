@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import 'package:flutter/foundation.dart';
 
+import '../service/visita_museo_service.dart';
 import 'detalle_mision_page.dart';
 
 import '../model/Mision.dart';
@@ -12,7 +14,10 @@ import '../model/ObjetoMuseo.dart';
 import '../model/VisitorState.dart';
 
 import '../service/TuristaService.dart';
+import 'detalle_objeto_page.dart';
 
+import '../../badges/models/badge.dart' as modelo;
+import '../../badges/services/badgeService.dart';
 
 
 class TuristaHomePage extends StatefulWidget {
@@ -34,12 +39,20 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
 
   late final TuristaService _turistaService;
+  late final VisitaMuseoService _visitaMuseoService;
+
 
   bool _loading = true;
   String? _error;
 
   List<Mision> _misiones = [];
   List<ObjetoMuseo> _objetos = [];
+
+  late final BadgeService _badgeService;
+
+  List<modelo.Badge> _insignias = [];
+
+  bool _cargandoInsignias = true;
 
   // Estadísticas temporales de la visita
   VisitorState _estadisticas = VisitorState(
@@ -74,10 +87,54 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
 
     _turistaService = TuristaService(supabase);
 
+    _badgeService = BadgeService(supabase);
+
+    _cargarInsignias();
     _cargarDatos();
+
+    _visitaMuseoService = VisitaMuseoService(
+      Supabase.instance.client,
+    );
+
+    _registrarVisitaMuseo();
   }
 
 
+  Future<void> _registrarVisitaMuseo() async {
+    try {
+      await _visitaMuseoService.registrarVisita(
+        widget.museoId,
+      );
+
+      debugPrint('Visita al museo registrada');
+    } catch (e) {
+      debugPrint('Error al registrar visita: $e');
+    }
+  }
+
+
+  Future<void> _cargarInsignias() async {
+    try {
+      final insignias = await _badgeService.listarPorMuseo(
+        widget.museoId,
+        soloActivas: true,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _insignias = insignias;
+      });
+    } catch (e) {
+      debugPrint('Error al cargar insignias: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cargandoInsignias = false;
+        });
+      }
+    }
+  }
 
   Future<void> _cargarDatos() async {
     try {
@@ -207,6 +264,10 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
               const SizedBox(height: 12),
 
               _buildObjetos(),
+
+              _buildZonaTrofeos(),
+
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -526,12 +587,20 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
             height: 44,
             child: OutlinedButton(
               onPressed: () {
+                final rutaInicio = ModalRoute.of(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => DetalleMisionPage(
                       idMision: mision.id,
                       onMisionFinalizada: _registrarMisionFinalizada,
+                      onVolverInicio: () {
+                        if (rutaInicio != null) {
+                          Navigator.of(context).popUntil(
+                                (route) => route == rutaInicio,
+                          );
+                        }
+                      },
                     ),
                   ),
                 );
@@ -558,6 +627,7 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
   // =========================================================
 
   Widget _buildObjetos() {
+
     if (_objetos.isEmpty) {
       return _buildEmptyMessage(
         'No hay objetos disponibles.',
@@ -574,12 +644,12 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
     );
   }
 
+
   // =========================================================
   // TARJETA DE OBJETO
   // =========================================================
 
   Widget _buildObjetoCard(ObjetoMuseo objeto) {
-
     final String? rutaImagen = objeto.imagen?.trim();
 
     final String? imagenUrl =
@@ -593,130 +663,172 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
         imagenUrl != null &&
             imagenUrl.isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
 
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9F6F0),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFD6CEC2),
-        ),
-      ),
 
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Miniatura de la imagen
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DetalleObjetoPage(
+                objeto: objeto,
+              ),
+            ),
+          );
+        },
 
-            child: SizedBox(
-              width: 78,
-              height: 78,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
 
-              child: tieneImagen
-                  ? Image.network(
-                imagenUrl!,
-                width: 78,
-                height: 78,
-                fit: BoxFit.cover,
-
-                // Mientras se descarga la imagen
-                loadingBuilder: (
-                    context,
-                    child,
-                    loadingProgress,
-                    ) {
-                  if (loadingProgress == null) {
-                    return child;
-                  }
-
-                  return _buildImagePlaceholder(
-                    cargando: true,
-                  );
-                },
-
-                // Si falla la descarga o la URL
-                errorBuilder: (
-                    context,
-                    error,
-                    stackTrace,
-                    ) {
-                  return _buildImagePlaceholder();
-                },
-              )
-                  : _buildImagePlaceholder(),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9F6F0),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFD6CEC2),
             ),
           ),
 
-          const SizedBox(width: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
 
-          // Información del objeto
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  objeto.nombre,
+              // ==========================================
+              // MINIATURA DE LA IMAGEN
+              // ==========================================
 
-                  style: const TextStyle(
-                    color: Color(0xFF292621),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+
+                child: SizedBox(
+                  width: 78,
+                  height: 78,
+
+                  child: tieneImagen
+                      ? Image.network(
+                    imagenUrl!,
+                    width: 78,
+                    height: 78,
+                    fit: BoxFit.cover,
+
+                    // Mientras se descarga la imagen
+                    loadingBuilder: (
+                        context,
+                        child,
+                        loadingProgress,
+                        ) {
+                      if (loadingProgress == null) {
+                        return child;
+                      }
+
+                      return _buildImagePlaceholder(
+                        cargando: true,
+                      );
+                    },
+
+                    // Si falla la descarga
+                    errorBuilder: (
+                        context,
+                        error,
+                        stackTrace,
+                        ) {
+                      return _buildImagePlaceholder();
+                    },
+                  )
+                      : _buildImagePlaceholder(),
                 ),
+              ),
 
-                const SizedBox(height: 5),
+              const SizedBox(width: 14),
 
-                Text(
-                  objeto.descripcion,
+              // ==========================================
+              // INFORMACIÓN DEL OBJETO
+              // ==========================================
 
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                  style: const TextStyle(
-                    color: Color(0xFF756F68),
-                    fontSize: 12,
-                    height: 1.3,
-                  ),
-                ),
+                    Text(
+                      objeto.nombre,
 
-                if (objeto.ubicacion != null &&
-                    objeto.ubicacion!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 7),
-
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        color: Color(0xFF8B6F47),
-                        size: 15,
+                      style: const TextStyle(
+                        color: Color(0xFF292621),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
 
-                      const SizedBox(width: 4),
+                    const SizedBox(height: 5),
 
-                      Expanded(
-                        child: Text(
-                          objeto.ubicacion!,
+                    Text(
+                      objeto.descripcion,
 
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
 
-                          style: const TextStyle(
+                      style: const TextStyle(
+                        color: Color(0xFF756F68),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+
+                    if (objeto.ubicacion != null &&
+                        objeto.ubicacion!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 7),
+
+                      Row(
+                        children: [
+
+                          const Icon(
+                            Icons.location_on_outlined,
                             color: Color(0xFF8B6F47),
-                            fontSize: 11,
+                            size: 15,
                           ),
-                        ),
+
+                          const SizedBox(width: 4),
+
+                          Expanded(
+                            child: Text(
+                              objeto.ubicacion!,
+
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+
+                              style: const TextStyle(
+                                color: Color(0xFF8B6F47),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
-              ],
-            ),
+                  ],
+                ),
+              ),
+
+              // Indicador visual de que se puede abrir
+              const SizedBox(width: 8),
+
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+
+                child: Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: Color(0xFF8B6F47),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -752,6 +864,170 @@ class _TuristaHomePageState extends State<TuristaHomePage> {
     );
   }
 
+  Widget _buildZonaTrofeos() {
+    if (_cargandoInsignias) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_insignias.isEmpty) {
+      return const Text(
+        'Todavía no hay insignias disponibles.',
+      );
+    }
+
+    final desbloqueadas = _insignias.where((insignia) {
+      return _estadisticas.puntos >= insignia.puntosRequeridos;
+    }).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Zona de trofeos',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF292621),
+              ),
+            ),
+            Text(
+              '$desbloqueadas/${_insignias.length}',
+              style: const TextStyle(
+                color: Color(0xFF8B6F47),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 6),
+
+        Text(
+          'Conseguí puntos completando misiones para desbloquear insignias.',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey.shade700,
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _insignias.length,
+          gridDelegate:
+          const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.78,
+          ),
+          itemBuilder: (context, index) {
+            return _buildTrofeoCard(_insignias[index]);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrofeoCard(modelo.Badge insignia) {
+    final desbloqueada =
+        _estadisticas.puntos >= insignia.puntosRequeridos;
+
+    final imagenUrl = _badgeService.obtenerImagenUrl(
+      insignia.imagen,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9F6F0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: desbloqueada
+              ? const Color(0xFF8B6F47)
+              : const Color(0xFFD6CEC2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (imagenUrl != null)
+                  Opacity(
+                    opacity: desbloqueada ? 1 : 0.25,
+                    child: Image.network(
+                      imagenUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) {
+                        return const Icon(
+                          Icons.workspace_premium_outlined,
+                          size: 45,
+                          color: Color(0xFF8B6F47),
+                        );
+                      },
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.workspace_premium_outlined,
+                    size: 45,
+                    color: desbloqueada
+                        ? const Color(0xFF8B6F47)
+                        : Colors.grey,
+                  ),
+
+                if (!desbloqueada)
+                  const Icon(
+                    Icons.lock_rounded,
+                    size: 30,
+                    color: Color(0xFF292621),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            insignia.nombre,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF292621),
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          Text(
+            desbloqueada
+                ? 'Desbloqueada'
+                : '${insignia.puntosRequeridos} puntos',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10,
+              color: desbloqueada
+                  ? const Color(0xFF66834D)
+                  : Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   // =========================================================
   // VACIO
   // =========================================================

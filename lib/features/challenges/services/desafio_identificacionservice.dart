@@ -1,4 +1,5 @@
 
+import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/desafio_identificacion_config.dart';
@@ -18,9 +19,14 @@ class DesafioIdentificacionService {
         .eq('id_desafio', idDesafio)
         .maybeSingle();
 
+    debugPrint('ID BUSCADO: $idDesafio');
+    debugPrint('DATOS RECUPERADOS: $data');
+
     if (data == null) return null;
 
-    return DesafioIdentificacionConfig.fromMap(data);
+    return DesafioIdentificacionConfig.fromMap(
+      Map<String, dynamic>.from(data),
+    );
   }
 
   // Crear configuración
@@ -62,6 +68,8 @@ class DesafioIdentificacionService {
       'id_objeto_correcto': config.idObjetoCorrecto,
       'imagen_referencia': config.imagenReferencia,
       'tipo_identificacion': config.tipoIdentificacion,
+
+
     });
   }
 

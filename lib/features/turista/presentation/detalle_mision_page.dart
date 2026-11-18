@@ -14,11 +14,13 @@ class DetalleMisionPage extends StatefulWidget {
 
 
   final ValueChanged<int> onMisionFinalizada;
+  final VoidCallback onVolverInicio;
 
   const DetalleMisionPage({
     super.key,
     required this.idMision,
     required this.onMisionFinalizada,
+    required this.onVolverInicio,
   });
 
   @override
@@ -88,6 +90,7 @@ class _DetalleMisionPageState extends State<DetalleMisionPage> {
         builder: (context) => MisionEnCursoPage(
           idMision: widget.idMision,
           onMisionFinalizada: widget.onMisionFinalizada,
+          onVolverInicio: widget.onVolverInicio,
         ),
       ),
     );
@@ -397,6 +400,7 @@ class _DetalleMisionPageState extends State<DetalleMisionPage> {
                           builder: (context) => MisionEnCursoPage(
                             idMision: widget.idMision,
                             onMisionFinalizada: widget.onMisionFinalizada,
+                            onVolverInicio: widget.onVolverInicio,
                           ),
                         ),
                       );
