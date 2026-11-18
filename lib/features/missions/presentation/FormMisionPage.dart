@@ -212,13 +212,13 @@ class _FormMisionPageState extends State<FormMisionPage> {
                   maxLines: 4,
                 ),
 
-                const SizedBox(height: 16),
+                /*const SizedBox(height: 16),
 
                 _campo(
                   controller: _imagenController,
                   label: 'Imagen',
                   hint: 'URL de la imagen',
-                ),
+                ),*/
 
                 const SizedBox(height: 16),
 

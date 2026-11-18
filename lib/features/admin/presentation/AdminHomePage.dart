@@ -145,7 +145,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             ),
           ],
         ),
-        actions: [
+        /*actions: [
           IconButton(
             icon: const Icon(
               Icons.settings_outlined,
@@ -155,7 +155,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               // Configuración futura
             },
           ),
-        ],
+        ],*/
       ),
 
       body: SafeArea(
@@ -471,7 +471,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               // =====================================================
               // ACTIVIDAD RECIENTE
               // =====================================================
-
+/*
               const Text(
                 'Actividad reciente',
                 style: TextStyle(
@@ -520,7 +520,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 32),*/
 
               // =====================================================
               // CERRAR SESIÓN

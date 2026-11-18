@@ -367,7 +367,10 @@ class _FormDesafioPageState extends State<FormDesafioPage> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          items: TipoDesafio.values.map((tipo) {
+          items: [
+            TipoDesafio.pregunta,
+            TipoDesafio.identificacion,
+          ].map((tipo) {
             return DropdownMenuItem(
               value: tipo,
               child: Row(
@@ -472,13 +475,13 @@ class _FormDesafioPageState extends State<FormDesafioPage> {
                   ),
                   const SizedBox(height: 18),
                   _campo(
-                    etiqueta: 'Descripción',
+                    etiqueta: 'Pregunta/Descripcion',
                     controller: _descripcionController,
                     ayuda: 'Explicá qué debe realizar el visitante',
                     maxLines: 4,
                     validator: (v) =>
                     v == null || v.trim().isEmpty
-                        ? 'Ingresá una descripción'
+                        ? 'Ingresá una descripción/pregunta'
                         : null,
                   ),
                   const SizedBox(height: 18),
@@ -497,16 +500,29 @@ class _FormDesafioPageState extends State<FormDesafioPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: _campo(
-                          etiqueta: 'Orden',
-                          controller: _ordenController,
-                          keyboardType: TextInputType.number,
-                          validator: (v) {
-                            final n = int.tryParse(v ?? '');
-                            return n == null || n < 1
-                                ? 'Orden inválido'
-                                : null;
-                          },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _campo(
+                              etiqueta: 'Orden',
+                              controller: _ordenController,
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                final n = int.tryParse(v ?? '');
+                                return n == null || n < 1
+                                    ? 'Orden inválido'
+                                    : null;
+                              },
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              'Indica la posición del desafío dentro de la misión. Respeta orden de desafios',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 12),
